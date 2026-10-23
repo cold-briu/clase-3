@@ -12,6 +12,8 @@ import {
 import {
   getAuth,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged
@@ -372,6 +374,11 @@ function listenToMessages() {
   });
 }
 
+// Check redirect result on initialization if redirect was used
+getRedirectResult(auth).catch((err) => {
+  console.warn("getRedirectResult warning:", err);
+});
+
 // Google Sign-In button event listener
 if (googleLoginBtn) {
   googleLoginBtn.addEventListener("click", async () => {
@@ -381,10 +388,30 @@ if (googleLoginBtn) {
       googleLoginBtn.style.opacity = "0.7";
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
-      console.error("Google Auth error:", err);
-      if (authErrorMsg) {
-        authErrorMsg.textContent = err.message || "Failed to sign in with Google";
-        authErrorMsg.classList.remove("hidden");
+      console.warn("Popup sign-in error, trying redirect fallback:", err);
+      // If popup was blocked, closed, or hindered by COOP policy, fall back to redirect
+      if (
+        err.code === "auth/popup-blocked" || 
+        err.code === "auth/popup-closed-by-user" || 
+        err.code === "auth/cancelled-popup-request" ||
+        err.message?.includes("Cross-Origin-Opener-Policy")
+      ) {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        } catch (redirectErr) {
+          console.error("Redirect sign-in error:", redirectErr);
+          if (authErrorMsg) {
+            authErrorMsg.textContent = redirectErr.message || "Failed to sign in with Google";
+            authErrorMsg.classList.remove("hidden");
+          }
+        }
+      } else {
+        console.error("Google Auth error:", err);
+        if (authErrorMsg) {
+          authErrorMsg.textContent = err.message || "Failed to sign in with Google";
+          authErrorMsg.classList.remove("hidden");
+        }
       }
     } finally {
       googleLoginBtn.disabled = false;
