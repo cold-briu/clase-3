@@ -1,20 +1,20 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  query, 
-  orderBy, 
-  limit, 
-  onSnapshot, 
-  serverTimestamp 
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  signOut, 
-  onAuthStateChanged 
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 
 // Firebase configuration
@@ -121,20 +121,7 @@ async function requestGeminiResponse(userPrompt, conversationContext = []) {
   const models = ["gemini-3.8-flash", "gemini-2.5-flash"];
   let lastError = null;
 
-  const contents = [
-    {
-      role: "user",
-      parts: [
-        {
-          text: `You are "${BOT_NAME}", a friendly, witty, and concise AI assistant inside a minimal neo-brutalist chat room. Keep your replies concise (under 2-3 sentences), helpful, and direct.`
-        }
-      ]
-    },
-    {
-      role: "model",
-      parts: [{ text: "Understood! I will keep my replies punchy, helpful, and concise." }]
-    }
-  ];
+  const contents = [];
 
   // Add conversation history context if available
   conversationContext.slice(-6).forEach((msg) => {
@@ -149,19 +136,29 @@ async function requestGeminiResponse(userPrompt, conversationContext = []) {
     parts: [{ text: userPrompt }]
   });
 
+  // Use proper systemInstruction
+  const bodyPayload = {
+    systemInstruction: {
+      parts: [
+        {
+          text: `You are "${BOT_NAME}", a helpful, friendly, and articulate AI chat assistant DO NOT INCLUDE YOUR NAME IN THE REPLY WITH COLONS, just the reply. Always reply with complete, well-formed full sentences. Never cut your thoughts off mid-sentence or reply with only fragments. Keep your answers engaging, natural, and complete.`
+        }
+      ]
+    },
+    contents,
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 2048
+    }
+  };
+
   for (const model of models) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024
-          }
-        })
+        body: JSON.stringify(bodyPayload)
       });
 
       if (!response.ok) {
@@ -170,7 +167,11 @@ async function requestGeminiResponse(userPrompt, conversationContext = []) {
       }
 
       const data = await response.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const candidate = data.candidates?.[0];
+      const reply = candidate?.content?.parts?.[0]?.text;
+      if (candidate?.finishReason && candidate.finishReason !== "STOP") {
+        console.warn(`Gemini finishReason: ${candidate.finishReason}`);
+      }
       if (reply) return reply.trim();
     } catch (err) {
       lastError = err;
@@ -228,9 +229,9 @@ function getAuthorColorClass(username) {
       hash = ((hash << 5) + hash) + str.charCodeAt(i);
       hash = hash & hash; // Convert to 32bit integer
     }
-    
+
     let colorIndex = Math.abs(hash) % availableColorClasses.length;
-    
+
     // Check already assigned colors to pick the next unused color in pool if collision occurs
     const usedColors = new Set(Object.values(authorColors));
     if (usedColors.size < availableColorClasses.length && usedColors.has(availableColorClasses[colorIndex])) {
@@ -242,7 +243,7 @@ function getAuthorColorClass(username) {
         }
       }
     }
-    
+
     authorColors[username] = availableColorClasses[colorIndex];
   }
   return authorColors[username];
@@ -340,11 +341,11 @@ function listenToMessages() {
       }
 
       appendMessage(
-        docId, 
-        data.user || "Anonymous", 
-        data.text || "", 
-        data.createdAt, 
-        isSelf, 
+        docId,
+        data.user || "Anonymous",
+        data.text || "",
+        data.createdAt,
+        isSelf,
         data.userPhoto || ""
       );
     });
@@ -452,7 +453,7 @@ chatForm.addEventListener("submit", async (e) => {
   if (!text || !currentUser || !auth.currentUser) return;
 
   messageInput.value = "";
-  
+
   try {
     const payload = {
       user: currentUser,
