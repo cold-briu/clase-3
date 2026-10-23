@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minimal Chat — Neo Brutalist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Compact Nav -->
+  <header class="navbar">
+    <div class="logo">
+      <span>ROOM.CHAT</span>
+      <span class="badge">v1.0</span>
+    </div>
+    <div class="nav-links">
+      <div class="online-tag">
+        <span class="dot"></span>
+        <span id="activeCount">6 online</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <div class="app-box">
+      <!-- Box Topbar -->
+      <div class="box-header">
+        <span class="box-title" id="boxTitle">Public Channel #general</span>
+        <div id="headerActions">
+          <span class="status-text" id="statusLabel">guest</span>
+        </div>
+      </div>
+
+      <!-- Welcome / Join View -->
+      <section id="welcomeView" class="view-panel welcome-panel">
+        <h1 class="hero-title">Talk to anyone. Minimal.</h1>
+        <p class="hero-subtitle">Enter your handle to jump into the stream.</p>
+        <form id="nameForm" class="name-form" autocomplete="off">
+          <input 
+            type="text" 
+            id="nameInput" 
+            class="input-brutal" 
+            placeholder="Your nickname..." 
+            maxlength="20"
+            required
+            autofocus
+          >
+          <button type="submit" class="btn-brutal" id="joinBtn">Join Chat</button>
+        </form>
+      </section>
+
+      <!-- Chat View -->
+      <section id="chatView" class="view-panel chat-panel hidden">
+        <div class="messages-list" id="messagesList">
+          <!-- Messages will be injected here -->
+        </div>
+
+        <form id="chatForm" class="chat-input-bar" autocomplete="off">
+          <input 
+            type="text" 
+            id="messageInput" 
+            class="input-brutal" 
+            placeholder="Say something..." 
+            maxlength="280"
+            required
+          >
+          <button type="submit" class="btn-brutal" id="sendBtn">Send</button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <!-- Compact Footer -->
+  <footer class="footer">
+    <span class="footer-left">ROOM.CHAT &copy; 2026</span>
+    <div class="footer-links">
+      <a href="#rules" id="rulesLink">Rules</a>
+      <a href="#about" id="aboutLink">About</a>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
