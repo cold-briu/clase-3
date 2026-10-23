@@ -31,7 +31,9 @@
       <!-- Box Topbar -->
       <div class="box-header">
         <span class="box-title" id="boxTitle">Public Channel #general</span>
-        <div id="headerActions">
+        <div id="headerActions" class="header-actions">
+          <span class="bot-badge" id="botBadge" title="Gemini Bot status">🤖 Bot Active</span>
+          <button id="botSettingsBtn" class="btn-icon" title="Configure Gemini Bot">⚙️</button>
           <span class="status-text" id="statusLabel">guest</span>
         </div>
       </div>
@@ -75,14 +77,37 @@
     </div>
   </main>
 
-  <!-- Compact Footer -->
-  <footer class="footer">
-    <span class="footer-left">ROOM.CHAT &copy; 2026</span>
-    <div class="footer-links">
-      <a href="#rules" id="rulesLink">Rules</a>
-      <a href="#about" id="aboutLink">About</a>
+  <!-- Bot Settings Modal -->
+  <div id="botModal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title">🤖 Gemini Bot Config</span>
+        <button id="closeModalBtn" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Powered by Gemini Flash (<code>gemini-3.8-flash</code>).
+          The bot automatically replies to messages in the chat.
+        </p>
+        <label for="geminiApiKeyInput" class="modal-label">Google AI Studio API Key:</label>
+        <input 
+          type="password" 
+          id="geminiApiKeyInput" 
+          class="input-brutal" 
+          placeholder="AIzaSy..." 
+          autocomplete="off"
+        >
+        <div class="modal-checkbox-row">
+          <label>
+            <input type="checkbox" id="botEnabledToggle" checked> Enable Bot auto-reply
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button id="saveBotConfigBtn" class="btn-brutal">Save & Apply</button>
+        </div>
+      </div>
     </div>
-  </footer>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>
