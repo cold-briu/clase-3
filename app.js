@@ -1,3 +1,30 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  query, 
+  orderBy, 
+  limit, 
+  onSnapshot, 
+  serverTimestamp 
+} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyA7MSR-g4CxKR8jjqPUOnl3Q29Jqms-EEY",
+  authDomain: "gen-lang-client-0045092944.firebaseapp.com",
+  projectId: "gen-lang-client-0045092944",
+  storageBucket: "gen-lang-client-0045092944.firebasestorage.app",
+  messagingSenderId: "252872963102",
+  appId: "1:252872963102:web:5b15f0089b6f21ee4d6a0f"
+};
+
+// Initialize Firebase & Firestore
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const messagesCollection = collection(db, "messages");
+
 // State
 let currentUser = "";
 const authorColors = {};
@@ -7,24 +34,6 @@ const availableColorClasses = [
   "author-yellow",
   "author-purple",
   "author-orange"
-];
-
-// Initial mock conversations
-const initialMocks = [
-  { user: "Aiko", text: "anyone trying the new neo-brutalist theme?", time: "19:42" },
-  { user: "dev_dan", text: "clean lines and solid colors look so crisp honestly", time: "19:45" },
-  { user: "Sora", text: "zero gradients, maximal punch.", time: "19:50" },
-  { user: "pixelPete", text: "welcome newcomers! drop your thoughts in the channel.", time: "19:54" }
-];
-
-// Dynamic mock responses that randomly drop in while active
-const simulatedResponses = [
-  { user: "Aiko", text: "Agreed! It keeps things straightforward." },
-  { user: "dev_dan", text: "Minimal animations feel way faster too." },
-  { user: "Sora", text: "Typing something fresh here!" },
-  { user: "pixelPete", text: "Nice point! The flat layout works well." },
-  { user: "marta_k", text: "Hello everyone, just stepped into the room." },
-  { user: "neo_coder", text: "CSS variables make flat palettes very neat." }
 ];
 
 // DOM elements
@@ -37,31 +46,35 @@ const messageInput = document.getElementById("messageInput");
 const messagesList = document.getElementById("messagesList");
 const boxTitle = document.getElementById("boxTitle");
 const statusLabel = document.getElementById("statusLabel");
-const activeCount = document.getElementById("activeCount");
 const rulesLink = document.getElementById("rulesLink");
 const aboutLink = document.getElementById("aboutLink");
 
 // Color assignment helper
 function getAuthorColorClass(username) {
   if (!authorColors[username]) {
-    const hash = username.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const colorIndex = hash % availableColorClasses.length;
+    const hash = (username || "anon").split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const colorIndex = Math.abs(hash) % availableColorClasses.length;
     authorColors[username] = availableColorClasses[colorIndex];
   }
   return authorColors[username];
 }
 
-function getCurrentTime() {
-  const now = new Date();
-  const h = String(now.getHours()).padStart(2, '0');
-  const m = String(now.getMinutes()).padStart(2, '0');
+function formatTimestamp(timestamp) {
+  if (!timestamp) {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  }
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
   return `${h}:${m}`;
 }
 
-// Render single message
-function appendMessage(user, text, time = getCurrentTime(), isSelf = false) {
+// Render message to DOM
+function appendMessage(id, user, text, timestamp, isSelf) {
   const item = document.createElement("div");
   item.className = `message-item ${isSelf ? 'self' : 'other'}`;
+  item.dataset.id = id;
 
   const meta = document.createElement("div");
   meta.className = "msg-meta";
@@ -72,7 +85,7 @@ function appendMessage(user, text, time = getCurrentTime(), isSelf = false) {
 
   const timeTag = document.createElement("span");
   timeTag.className = "msg-time";
-  timeTag.textContent = time;
+  timeTag.textContent = formatTimestamp(timestamp);
 
   if (isSelf) {
     meta.appendChild(timeTag);
@@ -90,8 +103,25 @@ function appendMessage(user, text, time = getCurrentTime(), isSelf = false) {
   item.appendChild(bubble);
   messagesList.appendChild(item);
 
-  // Auto scroll to latest
+  // Auto scroll to bottom
   messagesList.scrollTop = messagesList.scrollHeight;
+}
+
+// Subscribe to Firestore "messages" collection in real-time
+let unsubscribe = null;
+function listenToMessages() {
+  const q = query(messagesCollection, orderBy("createdAt", "asc"), limit(100));
+
+  unsubscribe = onSnapshot(q, (snapshot) => {
+    messagesList.innerHTML = ""; // Clear existing messages
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const isSelf = data.user === currentUser;
+      appendMessage(doc.id, data.user || "Anonymous", data.text || "", data.createdAt, isSelf);
+    });
+  }, (error) => {
+    console.error("Firestore snapshot error:", error);
+  });
 }
 
 // Handle entering chat
@@ -102,48 +132,39 @@ nameForm.addEventListener("submit", (e) => {
 
   currentUser = name;
   statusLabel.textContent = `@${currentUser}`;
-  boxTitle.textContent = `#general — Connected`;
+  boxTitle.textContent = `#general — Live`;
 
   welcomeView.classList.add("hidden");
   chatView.classList.remove("hidden");
 
-  // Load initial mocks
-  initialMocks.forEach(m => appendMessage(m.user, m.text, m.time, false));
-
-  // Welcome system message
-  appendMessage("System", `Welcome @${currentUser}! Join the discussion below.`, getCurrentTime(), false);
+  // Start real-time Firestore sync
+  listenToMessages();
 
   messageInput.focus();
-  startMockSimulation();
 });
 
 // Handle sending message
-chatForm.addEventListener("submit", (e) => {
+chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = messageInput.value.trim();
-  if (!text) return;
+  if (!text || !currentUser) return;
 
-  appendMessage(currentUser, text, getCurrentTime(), true);
   messageInput.value = "";
+  
+  try {
+    await addDoc(messagesCollection, {
+      user: currentUser,
+      text: text,
+      createdAt: serverTimestamp()
+    });
+  } catch (err) {
+    console.error("Error writing message to Firestore:", err);
+  }
+
   messageInput.focus();
 });
 
-// Simulate incoming messages from other mock users periodically
-let mockIndex = 0;
-function startMockSimulation() {
-  setInterval(() => {
-    if (mockIndex < simulatedResponses.length) {
-      const msg = simulatedResponses[mockIndex];
-      appendMessage(msg.user, msg.text, getCurrentTime(), false);
-      mockIndex++;
-      
-      // Update count slightly for realistic touch
-      activeCount.textContent = `${6 + (mockIndex % 3)} online`;
-    }
-  }, 12000);
-}
-
-// Footer links handlers (alert modal minimal)
+// Footer links
 rulesLink.addEventListener("click", (e) => {
   e.preventDefault();
   alert("Room Rules:\n1. Be polite\n2. Keep it minimal\n3. Enjoy chatting!");
@@ -151,5 +172,5 @@ rulesLink.addEventListener("click", (e) => {
 
 aboutLink.addEventListener("click", (e) => {
   e.preventDefault();
-  alert("ROOM.CHAT: Minimal neo-brutalist chat landing page built with vanilla HTML, CSS, and JS.");
+  alert("ROOM.CHAT: Minimal neo-brutalist chat powered by Firebase Firestore.");
 });
