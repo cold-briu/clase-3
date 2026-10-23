@@ -159,7 +159,7 @@ async function requestGeminiResponse(userPrompt, conversationContext = []) {
           contents,
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 250
+            maxOutputTokens: 1024
           }
         })
       });
@@ -262,7 +262,8 @@ function formatTimestamp(timestamp) {
 // Render message to DOM
 function appendMessage(id, user, text, timestamp, isSelf, photoURL) {
   const item = document.createElement("div");
-  item.className = `message-item ${isSelf ? 'self' : 'other'}`;
+  const isBot = user === BOT_NAME;
+  item.className = `message-item ${isSelf ? 'self' : 'other'}${isBot ? ' bot' : ''}`;
   item.dataset.id = id;
 
   const meta = document.createElement("div");

@@ -242,8 +242,12 @@ body {
 .message-item {
   display: flex;
   flex-direction: column;
-  max-width: 80%;
+  max-width: 85%;
   animation: fadeIn 0.1s ease-in;
+}
+
+.message-item.bot {
+  max-width: 90%;
 }
 
 @keyframes fadeIn {
@@ -312,8 +316,10 @@ body {
   border: var(--border-width) solid var(--border);
   border-radius: 4px;
   box-shadow: 2px 2px 0px var(--border);
-  line-height: 1.35;
+  line-height: 1.45;
+  white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .message-item.self .msg-bubble {
