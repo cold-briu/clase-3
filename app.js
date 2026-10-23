@@ -9,6 +9,13 @@ import {
   onSnapshot, 
   serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged 
+} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -20,13 +27,17 @@ const firebaseConfig = {
   appId: "1:252872963102:web:5b15f0089b6f21ee4d6a0f"
 };
 
-// Initialize Firebase & Firestore
+// Initialize Firebase, Auth & Firestore
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 const db = getFirestore(app);
 const messagesCollection = collection(db, "messages");
 
 // State
 let currentUser = "";
+let currentUserId = "";
+let currentUserPhoto = "";
 const authorColors = {};
 const availableColorClasses = [
   "author-pink",
@@ -53,8 +64,11 @@ const availableColorClasses = [
 // DOM elements
 const welcomeView = document.getElementById("welcomeView");
 const chatView = document.getElementById("chatView");
-const nameForm = document.getElementById("nameForm");
-const nameInput = document.getElementById("nameInput");
+const googleLoginBtn = document.getElementById("googleLoginBtn");
+const authErrorMsg = document.getElementById("authErrorMsg");
+const userProfile = document.getElementById("userProfile");
+const userAvatar = document.getElementById("userAvatar");
+const signOutBtn = document.getElementById("signOutBtn");
 const chatForm = document.getElementById("chatForm");
 const messageInput = document.getElementById("messageInput");
 const messagesList = document.getElementById("messagesList");
@@ -168,27 +182,33 @@ async function requestGeminiResponse(userPrompt, conversationContext = []) {
 }
 
 async function triggerBotReply(triggerText, recentMessages) {
-  if (!botEnabled || !geminiApiKey || isBotResponding) return;
+  if (!botEnabled || !geminiApiKey || isBotResponding || !auth.currentUser) return;
 
   isBotResponding = true;
   updateBotBadge();
 
   try {
     const botReply = await requestGeminiResponse(triggerText, recentMessages);
-    if (botReply) {
+    if (botReply && auth.currentUser) {
       await addDoc(messagesCollection, {
         user: BOT_NAME,
+        userId: auth.currentUser.uid,
+        userPhoto: "",
         text: botReply,
         createdAt: serverTimestamp()
       });
     }
   } catch (err) {
     console.error("Gemini Bot Error:", err);
-    await addDoc(messagesCollection, {
-      user: BOT_NAME,
-      text: `⚠️ [Gemini Error]: ${err.message}`,
-      createdAt: serverTimestamp()
-    });
+    if (auth.currentUser) {
+      await addDoc(messagesCollection, {
+        user: BOT_NAME,
+        userId: auth.currentUser.uid,
+        userPhoto: "",
+        text: `⚠️ [Gemini Error]: ${err.message}`,
+        createdAt: serverTimestamp()
+      });
+    }
   } finally {
     isBotResponding = false;
     updateBotBadge();
@@ -240,13 +260,21 @@ function formatTimestamp(timestamp) {
 }
 
 // Render message to DOM
-function appendMessage(id, user, text, timestamp, isSelf) {
+function appendMessage(id, user, text, timestamp, isSelf, photoURL) {
   const item = document.createElement("div");
   item.className = `message-item ${isSelf ? 'self' : 'other'}`;
   item.dataset.id = id;
 
   const meta = document.createElement("div");
   meta.className = "msg-meta";
+
+  if (photoURL && !isSelf && user !== BOT_NAME) {
+    const img = document.createElement("img");
+    img.className = "msg-avatar";
+    img.src = photoURL;
+    img.alt = user;
+    meta.appendChild(img);
+  }
 
   const authorTag = document.createElement("span");
   authorTag.className = `msg-author ${isSelf ? 'author-lime' : getAuthorColorClass(user)}`;
@@ -259,6 +287,13 @@ function appendMessage(id, user, text, timestamp, isSelf) {
   if (isSelf) {
     meta.appendChild(timeTag);
     meta.appendChild(authorTag);
+    if (photoURL) {
+      const img = document.createElement("img");
+      img.className = "msg-avatar";
+      img.src = photoURL;
+      img.alt = user;
+      meta.appendChild(img);
+    }
   } else {
     meta.appendChild(authorTag);
     meta.appendChild(timeTag);
@@ -279,6 +314,9 @@ function appendMessage(id, user, text, timestamp, isSelf) {
 // Subscribe to Firestore "messages" collection in real-time
 let unsubscribe = null;
 function listenToMessages() {
+  if (typeof unsubscribe === "function") {
+    unsubscribe();
+  }
   const q = query(messagesCollection, orderBy("createdAt", "asc"), limit(100));
 
   unsubscribe = onSnapshot(q, (snapshot) => {
@@ -288,7 +326,7 @@ function listenToMessages() {
 
     snapshot.forEach((doc) => {
       const data = doc.data();
-      const isSelf = data.user === currentUser;
+      const isSelf = auth.currentUser && data.userId === auth.currentUser.uid && data.user !== BOT_NAME;
       const docId = doc.id;
 
       currentMessages.push({ id: docId, ...data });
@@ -300,7 +338,14 @@ function listenToMessages() {
         }
       }
 
-      appendMessage(docId, data.user || "Anonymous", data.text || "", data.createdAt, isSelf);
+      appendMessage(
+        docId, 
+        data.user || "Anonymous", 
+        data.text || "", 
+        data.createdAt, 
+        isSelf, 
+        data.userPhoto || ""
+      );
     });
 
     // Check if initial load is complete
@@ -322,40 +367,102 @@ function listenToMessages() {
   });
 }
 
-// Handle entering chat
-nameForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const name = nameInput.value.trim();
-  if (!name) return;
+// Google Sign-In button event listener
+if (googleLoginBtn) {
+  googleLoginBtn.addEventListener("click", async () => {
+    try {
+      if (authErrorMsg) authErrorMsg.classList.add("hidden");
+      googleLoginBtn.disabled = true;
+      googleLoginBtn.style.opacity = "0.7";
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      console.error("Google Auth error:", err);
+      if (authErrorMsg) {
+        authErrorMsg.textContent = err.message || "Failed to sign in with Google";
+        authErrorMsg.classList.remove("hidden");
+      }
+    } finally {
+      googleLoginBtn.disabled = false;
+      googleLoginBtn.style.opacity = "1";
+    }
+  });
+}
 
-  currentUser = name;
-  statusLabel.textContent = `@${currentUser}`;
-  boxTitle.textContent = `#general — Live`;
+// Sign-out button event listener
+if (signOutBtn) {
+  signOutBtn.addEventListener("click", async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Error signing out:", err);
+    }
+  });
+}
 
-  welcomeView.classList.add("hidden");
-  chatView.classList.remove("hidden");
+// Listen to Firebase Auth state
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    currentUser = user.displayName || user.email?.split("@")[0] || "User";
+    currentUserId = user.uid;
+    currentUserPhoto = user.photoURL || "";
 
-  // Start real-time Firestore sync
-  listenToMessages();
-  updateBotBadge();
+    statusLabel.textContent = `@${currentUser}`;
+    if (userAvatar) {
+      if (currentUserPhoto) {
+        userAvatar.src = currentUserPhoto;
+        userAvatar.classList.remove("hidden");
+      } else {
+        userAvatar.classList.add("hidden");
+      }
+    }
+    if (userProfile) userProfile.classList.remove("hidden");
 
-  messageInput.focus();
+    boxTitle.textContent = `#general — Live`;
+    welcomeView.classList.add("hidden");
+    chatView.classList.remove("hidden");
+
+    listenToMessages();
+    updateBotBadge();
+    messageInput.focus();
+  } else {
+    currentUser = "";
+    currentUserId = "";
+    currentUserPhoto = "";
+
+    if (userProfile) userProfile.classList.add("hidden");
+    welcomeView.classList.remove("hidden");
+    chatView.classList.add("hidden");
+    boxTitle.textContent = "Public Channel #general";
+
+    if (typeof unsubscribe === "function") {
+      unsubscribe();
+      unsubscribe = null;
+    }
+    processedMessageIds.clear();
+    messagesList.innerHTML = "";
+    isInitialLoad = true;
+  }
 });
 
 // Handle sending message
 chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = messageInput.value.trim();
-  if (!text || !currentUser) return;
+  if (!text || !currentUser || !auth.currentUser) return;
 
   messageInput.value = "";
   
   try {
-    await addDoc(messagesCollection, {
+    const payload = {
       user: currentUser,
+      userId: auth.currentUser.uid,
       text: text,
       createdAt: serverTimestamp()
-    });
+    };
+    if (currentUserPhoto) {
+      payload.userPhoto = currentUserPhoto;
+    }
+    await addDoc(messagesCollection, payload);
   } catch (err) {
     console.error("Error writing message to Firestore:", err);
   }

@@ -1,0 +1,32 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /messages/{messageId} {
+      // Solo usuarios autenticados pueden leer mensajes
+      allow read: if request.auth != null;
+
+      // Solo usuarios autenticados pueden enviar mensajes con esquema validado
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasAll(['user', 'userId', 'text', 'createdAt'])
+                    && request.resource.data.keys().hasOnly(['user', 'userId', 'userPhoto', 'text', 'createdAt'])
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.user is string
+                    && request.resource.data.user.size() >= 1
+                    && request.resource.data.user.size() <= 60
+                    && request.resource.data.text is string
+                    && request.resource.data.text.size() >= 1
+                    && request.resource.data.text.size() <= 1000
+                    && request.resource.data.createdAt is timestamp
+                    && (!('userPhoto' in request.resource.data) || request.resource.data.userPhoto is string);
+
+      // Bloquear cualquier modificación o borrado de mensajes
+      allow update, delete: if false;
+    }
+
+    // Bloquear acceso a cualquier otra colección por defecto
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

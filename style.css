@@ -516,3 +516,105 @@ body {
   justify-content: flex-end;
   margin-top: 6px;
 }
+
+/* Authentication & Profile Styling */
+.auth-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  background: #ffffff;
+  color: #1a1a1a;
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: var(--border-width) solid var(--border);
+  box-shadow: 4px 4px 0px var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-google:hover {
+  background: #fffdf5;
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px var(--border);
+}
+
+.btn-google:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px var(--border);
+}
+
+.google-icon {
+  flex-shrink: 0;
+}
+
+.auth-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: var(--border-width) solid var(--border);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: 2px 2px 0px var(--border);
+  text-align: center;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  background: var(--yellow);
+}
+
+.btn-signout {
+  background: #fff;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border: var(--border-width) solid var(--border);
+  border-radius: 4px;
+  box-shadow: 1.5px 1.5px 0px var(--border);
+  cursor: pointer;
+  transition: transform 0.05s ease;
+}
+
+.btn-signout:hover {
+  background: #fee2e2;
+  transform: translate(-1px, -1px);
+  box-shadow: 2.5px 2.5px 0px var(--border);
+}
+
+.btn-signout:active {
+  transform: translate(1px, 1px);
+  box-shadow: 0.5px 0.5px 0px var(--border);
+}
+
+.msg-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  vertical-align: middle;
+}
