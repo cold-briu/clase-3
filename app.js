@@ -1,22 +1,20 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  query,
-  orderBy,
-  limit,
-  onSnapshot,
-  serverTimestamp
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  query, 
+  orderBy, 
+  limit, 
+  onSnapshot, 
+  serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
-import {
-  getAuth,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  GoogleAuthProvider,
-  signOut,
-  onAuthStateChanged
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged 
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 
 // Firebase configuration
@@ -123,7 +121,20 @@ async function requestGeminiResponse(userPrompt, conversationContext = []) {
   const models = ["gemini-3.8-flash", "gemini-2.5-flash"];
   let lastError = null;
 
-  const contents = [];
+  const contents = [
+    {
+      role: "user",
+      parts: [
+        {
+          text: `You are "${BOT_NAME}", a friendly and helpful AI assistant. Always reply with complete, well-formed full sentences. Do not prefix your reply with your name or colons, just output your direct response.`
+        }
+      ]
+    },
+    {
+      role: "model",
+      parts: [{ text: "Understood! I will reply directly with complete sentences without prefixing my name." }]
+    }
+  ];
 
   // Add conversation history context if available
   conversationContext.slice(-6).forEach((msg) => {
@@ -138,29 +149,19 @@ async function requestGeminiResponse(userPrompt, conversationContext = []) {
     parts: [{ text: userPrompt }]
   });
 
-  // Use proper systemInstruction
-  const bodyPayload = {
-    systemInstruction: {
-      parts: [
-        {
-          text: `You are "${BOT_NAME}", a helpful, friendly, and articulate AI chat assistant DO NOT INCLUDE YOUR NAME IN THE REPLY WITH COLONS, just the reply. Always reply with complete, well-formed full sentences. Never cut your thoughts off mid-sentence or reply with only fragments. Keep your answers engaging, natural, and complete.`
-        }
-      ]
-    },
-    contents,
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 2048
-    }
-  };
-
   for (const model of models) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyPayload)
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 1024
+          }
+        })
       });
 
       if (!response.ok) {
@@ -169,11 +170,7 @@ async function requestGeminiResponse(userPrompt, conversationContext = []) {
       }
 
       const data = await response.json();
-      const candidate = data.candidates?.[0];
-      const reply = candidate?.content?.parts?.[0]?.text;
-      if (candidate?.finishReason && candidate.finishReason !== "STOP") {
-        console.warn(`Gemini finishReason: ${candidate.finishReason}`);
-      }
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (reply) return reply.trim();
     } catch (err) {
       lastError = err;
@@ -193,25 +190,22 @@ async function triggerBotReply(triggerText, recentMessages) {
   try {
     const botReply = await requestGeminiResponse(triggerText, recentMessages);
     if (botReply && auth.currentUser) {
-      // Safe truncation to stay within rule limit (1000 chars)
-      const safeText = botReply.length > 950 ? botReply.slice(0, 950) + "…" : botReply;
       await addDoc(messagesCollection, {
         user: BOT_NAME,
         userId: auth.currentUser.uid,
         userPhoto: "",
-        text: safeText,
+        text: botReply,
         createdAt: serverTimestamp()
       });
     }
   } catch (err) {
     console.error("Gemini Bot Error:", err);
     if (auth.currentUser) {
-      const errMsg = `⚠️ [Gemini Error]: ${err.message}`.slice(0, 950);
       await addDoc(messagesCollection, {
         user: BOT_NAME,
         userId: auth.currentUser.uid,
         userPhoto: "",
-        text: errMsg,
+        text: `⚠️ [Gemini Error]: ${err.message}`,
         createdAt: serverTimestamp()
       });
     }
@@ -234,9 +228,9 @@ function getAuthorColorClass(username) {
       hash = ((hash << 5) + hash) + str.charCodeAt(i);
       hash = hash & hash; // Convert to 32bit integer
     }
-
+    
     let colorIndex = Math.abs(hash) % availableColorClasses.length;
-
+    
     // Check already assigned colors to pick the next unused color in pool if collision occurs
     const usedColors = new Set(Object.values(authorColors));
     if (usedColors.size < availableColorClasses.length && usedColors.has(availableColorClasses[colorIndex])) {
@@ -248,7 +242,7 @@ function getAuthorColorClass(username) {
         }
       }
     }
-
+    
     authorColors[username] = availableColorClasses[colorIndex];
   }
   return authorColors[username];
@@ -346,11 +340,11 @@ function listenToMessages() {
       }
 
       appendMessage(
-        docId,
-        data.user || "Anonymous",
-        data.text || "",
-        data.createdAt,
-        isSelf,
+        docId, 
+        data.user || "Anonymous", 
+        data.text || "", 
+        data.createdAt, 
+        isSelf, 
         data.userPhoto || ""
       );
     });
@@ -374,11 +368,6 @@ function listenToMessages() {
   });
 }
 
-// Check redirect result on initialization if redirect was used
-getRedirectResult(auth).catch((err) => {
-  console.warn("getRedirectResult warning:", err);
-});
-
 // Google Sign-In button event listener
 if (googleLoginBtn) {
   googleLoginBtn.addEventListener("click", async () => {
@@ -388,30 +377,10 @@ if (googleLoginBtn) {
       googleLoginBtn.style.opacity = "0.7";
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
-      console.warn("Popup sign-in error, trying redirect fallback:", err);
-      // If popup was blocked, closed, or hindered by COOP policy, fall back to redirect
-      if (
-        err.code === "auth/popup-blocked" || 
-        err.code === "auth/popup-closed-by-user" || 
-        err.code === "auth/cancelled-popup-request" ||
-        err.message?.includes("Cross-Origin-Opener-Policy")
-      ) {
-        try {
-          await signInWithRedirect(auth, googleProvider);
-          return;
-        } catch (redirectErr) {
-          console.error("Redirect sign-in error:", redirectErr);
-          if (authErrorMsg) {
-            authErrorMsg.textContent = redirectErr.message || "Failed to sign in with Google";
-            authErrorMsg.classList.remove("hidden");
-          }
-        }
-      } else {
-        console.error("Google Auth error:", err);
-        if (authErrorMsg) {
-          authErrorMsg.textContent = err.message || "Failed to sign in with Google";
-          authErrorMsg.classList.remove("hidden");
-        }
+      console.error("Google Auth error:", err);
+      if (authErrorMsg) {
+        authErrorMsg.textContent = err.message || "Failed to sign in with Google";
+        authErrorMsg.classList.remove("hidden");
       }
     } finally {
       googleLoginBtn.disabled = false;
@@ -483,7 +452,7 @@ chatForm.addEventListener("submit", async (e) => {
   if (!text || !currentUser || !auth.currentUser) return;
 
   messageInput.value = "";
-
+  
   try {
     const payload = {
       user: currentUser,
@@ -497,8 +466,6 @@ chatForm.addEventListener("submit", async (e) => {
     await addDoc(messagesCollection, payload);
   } catch (err) {
     console.error("Error writing message to Firestore:", err);
-    messageInput.value = text;
-    alert(`Failed to send message: ${err.message || err}`);
   }
 
   messageInput.focus();
