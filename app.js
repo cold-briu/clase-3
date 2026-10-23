@@ -191,22 +191,25 @@ async function triggerBotReply(triggerText, recentMessages) {
   try {
     const botReply = await requestGeminiResponse(triggerText, recentMessages);
     if (botReply && auth.currentUser) {
+      // Safe truncation to stay within rule limit (1000 chars)
+      const safeText = botReply.length > 950 ? botReply.slice(0, 950) + "…" : botReply;
       await addDoc(messagesCollection, {
         user: BOT_NAME,
         userId: auth.currentUser.uid,
         userPhoto: "",
-        text: botReply,
+        text: safeText,
         createdAt: serverTimestamp()
       });
     }
   } catch (err) {
     console.error("Gemini Bot Error:", err);
     if (auth.currentUser) {
+      const errMsg = `⚠️ [Gemini Error]: ${err.message}`.slice(0, 950);
       await addDoc(messagesCollection, {
         user: BOT_NAME,
         userId: auth.currentUser.uid,
         userPhoto: "",
-        text: `⚠️ [Gemini Error]: ${err.message}`,
+        text: errMsg,
         createdAt: serverTimestamp()
       });
     }
@@ -467,6 +470,8 @@ chatForm.addEventListener("submit", async (e) => {
     await addDoc(messagesCollection, payload);
   } catch (err) {
     console.error("Error writing message to Firestore:", err);
+    messageInput.value = text;
+    alert(`Failed to send message: ${err.message || err}`);
   }
 
   messageInput.focus();
